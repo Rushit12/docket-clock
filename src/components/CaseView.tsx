@@ -16,6 +16,8 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
   const c = existing ?? draft;
   const isNew = !existing;
   const today = todayISO();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const framed = typeof window !== "undefined" && window.self !== window.top;
 
   const update = (next: SavedCase) => (isNew ? setDraft(next) : upsert(next));
   const result = useMemo(() => generateTimeline(c.inputs, { overrides: c.overrides, orderItems: c.orderItems }), [c.inputs, c.overrides, c.orderItems]);
@@ -46,11 +48,15 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
           {isNew ? (
             <Button variant="primary" onClick={save} disabled={!c.inputs.county || !c.inputs.filingDate}><Save size={16} /> Save case</Button>
           ) : (
-            <Button variant="danger" onClick={() => { if (confirm(`Delete “${title}”? This can't be undone.`)) { remove(c.id); go("/cases"); } }}><Trash2 size={16} /> Delete</Button>
+            confirmDelete
+              ? <><Button variant="danger" onClick={() => { remove(c.id); go("/cases"); }}><Trash2 size={16} /> Delete permanently</Button><Button variant="ghost" onClick={() => setConfirmDelete(false)}>Keep case</Button></>
+              : <Button variant="danger" onClick={() => setConfirmDelete(true)}><Trash2 size={16} /> Delete</Button>
           )}
+          {!framed && <>
           <Button disabled={!result.entries.length} onClick={() => download(`${filename}.ics`, toICS([{ name: c.inputs.name || "Case", caseNumber: c.inputs.caseNumber, entries: result.entries }]), "text/calendar")}><CalendarPlus size={16} /> Add to calendar</Button>
           <Button disabled={!result.entries.length} onClick={() => download(`${filename}.csv`, toCSV(c.inputs.name, result.entries), "text/csv")}><FileSpreadsheet size={16} /> CSV</Button>
           <Button disabled={!result.entries.length} onClick={() => window.print()}><Printer size={16} /> Print</Button>
+          </>}
         </>}
       />
 

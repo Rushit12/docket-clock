@@ -52,7 +52,7 @@ export function Dashboard({ go }: { go: (r: string) => void }) {
       <PageHeader
         title={`Week of ${fmt(today)}`}
         sub={`${week.length} due in the next 7 days, ${overdue.length} past due, across ${cases.length} ${cases.length === 1 ? "case" : "cases"}.`}
-        actions={<Button onClick={() => download("docket-clock-all-cases.ics", toICS(cases.map((c) => ({ name: c.inputs.name, caseNumber: c.inputs.caseNumber, entries: generateTimeline(c.inputs, { overrides: c.overrides, orderItems: c.orderItems }).entries }))), "text/calendar")}><CalendarPlus size={16} /> Export all to calendar</Button>}
+        actions={window.self !== window.top ? undefined : <Button onClick={() => download("docket-clock-all-cases.ics", toICS(cases.map((c) => ({ name: c.inputs.name, caseNumber: c.inputs.caseNumber, entries: generateTimeline(c.inputs, { overrides: c.overrides, orderItems: c.orderItems }).entries }))), "text/calendar")}><CalendarPlus size={16} /> Export all to calendar</Button>}
       />
       {overdue.length > 0 && <Group title="Past due" items={overdue} today={today} go={go} late />}
       <Group title="Next 7 days" items={week} today={today} go={go} emptyText="Nothing due this week." />
