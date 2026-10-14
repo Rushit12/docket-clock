@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-paper: #f7f8f6;
+  --color-card: #ffffff;
+  --color-ink: #14233c;
+  --color-ink-2: #3c4a60;
+  --color-muted: #6b7587;
+  --color-rule: #dfe3e8;
+  --color-rule-2: #eceff2;
+  --color-highlight: #f2d13a;
+  --color-highlight-soft: #fbefb0;
+  --color-late: #b4332b;
+  --color-late-soft: #f8e3e1;
+  --color-done: #2f6b4f;
+  --color-done-soft: #e2efe8;
+  --color-link: #1f4fa0;
+}
+
+html { background: var(--color-paper); color: var(--color-ink); }
+body { font-feature-settings: "tnum" 1, "cv11" 1; -webkit-font-smoothing: antialiased; }
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* The highlighter swipe: the one memorable mark in the interface. */
+.hl {
+  background-image: linear-gradient(100deg, transparent 0 2%, var(--color-highlight) 3% 96%, transparent 98%);
+  background-size: 100% 62%;
+  background-position: 0 70%;
+  background-repeat: no-repeat;
+  padding: 0 0.15em;
+  margin: 0 -0.15em;
+}
+
+:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; border-radius: 4px; }
+
+input, select, textarea { font: inherit; }
+
+.field {
+  width: 100%;
+  border: 1px solid var(--color-rule);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.925rem;
+  color: var(--color-ink);
+}
+.field:focus { outline: 2px solid var(--color-link); outline-offset: 0; border-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #fff; }
+  .print-full { width: 100% !important; max-width: none !important; }
+}
