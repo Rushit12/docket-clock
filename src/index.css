@@ -1,52 +1,72 @@
 @import "tailwindcss";
 
+/* Docket Clock — calm, evergreen, with a single highlighter-yellow mark for "due soon". */
 @theme {
-  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
-  --color-paper: #f7f8f6;
-  --color-card: #ffffff;
-  --color-ink: #14233c;
-  --color-ink-2: #3c4a60;
-  --color-muted: #6b7587;
-  --color-rule: #dfe3e8;
-  --color-rule-2: #eceff2;
-  --color-highlight: #f2d13a;
-  --color-highlight-soft: #fbefb0;
-  --color-late: #b4332b;
-  --color-late-soft: #f8e3e1;
-  --color-done: #2f6b4f;
-  --color-done-soft: #e2efe8;
-  --color-link: #1f4fa0;
+  --font-sans: "Figtree Variable", "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", "Figtree", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #f4f6f5;
+  --color-surface: #ffffff;
+  --color-ink: #13241f;
+  --color-ink-2: #44554f;
+  --color-muted: #75847f;
+  --color-line: #e3e8e6;
+  --color-line-2: #eef2f0;
+  --color-brand: #0f6b57;
+  --color-brand-2: #0b5444;
+  --color-brand-soft: #e3f1ec;
+  --color-sun: #ffd84d;
+  --color-sun-soft: #fff4c7;
+  --color-sun-ink: #6a5200;
+  --color-late: #c2412d;
+  --color-late-soft: #fbe9e5;
+  --color-sky: #2a5bd7;
+  --color-sky-soft: #e8eefc;
 }
 
-html { background: var(--color-paper); color: var(--color-ink); }
-body { font-feature-settings: "tnum" 1, "cv11" 1; -webkit-font-smoothing: antialiased; }
-
+html { background: var(--color-canvas); color: var(--color-ink); }
+body { -webkit-font-smoothing: antialiased; font-size: 15px; }
 .tabular { font-variant-numeric: tabular-nums; }
+.display { font-family: var(--font-display); font-optical-sizing: auto; letter-spacing: -0.02em; text-wrap: balance; }
 
-/* The highlighter swipe: the one memorable mark in the interface. */
+/* Highlighter swipe for anything due in the next two weeks. */
 .hl {
-  background-image: linear-gradient(100deg, transparent 0 2%, var(--color-highlight) 3% 96%, transparent 98%);
-  background-size: 100% 62%;
-  background-position: 0 70%;
+  background-image: linear-gradient(100deg, transparent 0 1%, var(--color-sun) 2% 97%, transparent 99%);
+  background-size: 100% 58%;
+  background-position: 0 78%;
   background-repeat: no-repeat;
-  padding: 0 0.15em;
-  margin: 0 -0.15em;
+  padding-inline: 0.12em;
+  margin-inline: -0.12em;
 }
 
-:focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2.5px solid var(--color-sky); outline-offset: 2px; border-radius: 8px; }
+input, select, textarea, button { font: inherit; }
 
-input, select, textarea { font: inherit; }
-
-.field {
+.input {
   width: 100%;
-  border: 1px solid var(--color-rule);
-  background: #fff;
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem;
-  font-size: 0.925rem;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  font-size: 15px;
   color: var(--color-ink);
+  transition: border-color .15s;
 }
-.field:focus { outline: 2px solid var(--color-link); outline-offset: 0; border-color: transparent; }
+.input:hover { border-color: #cfd8d4; }
+.input:focus { outline: none; border-color: var(--color-brand); box-shadow: 0 0 0 4px var(--color-brand-soft); }
+.input::placeholder { color: #9aa7a2; }
+
+.shadow-soft { box-shadow: 0 1px 2px rgba(19, 36, 31, .04), 0 8px 24px -12px rgba(19, 36, 31, .12); }
+.shadow-lift { box-shadow: 0 2px 4px rgba(19, 36, 31, .05), 0 24px 48px -20px rgba(19, 36, 31, .28); }
+
+@keyframes sheet-in { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes sheet-up { from { transform: translateY(32px); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes toast-in { from { transform: translate(-50%, 12px); opacity: 0 } to { transform: translate(-50%, 0); opacity: 1 } }
+.anim-sheet { animation: sheet-in .22s ease-out; }
+.anim-up { animation: sheet-up .24s ease-out; }
+.anim-fade { animation: fade-in .18s ease-out; }
+.anim-toast { animation: toast-in .2s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -55,5 +75,6 @@ input, select, textarea { font: inherit; }
 @media print {
   .no-print { display: none !important; }
   html, body { background: #fff; }
-  .print-full { width: 100% !important; max-width: none !important; }
 }
+.sheet-panel { animation: sheet-up .24s ease-out; }
+@media (min-width: 640px) { .sheet-panel { animation: sheet-in .22s ease-out; } }

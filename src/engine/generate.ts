@@ -138,6 +138,8 @@ export function generateTimeline(input: CaseInputs, opts: GenerateOptions = {}):
       citation: item.citation ?? (confidence === "verified" ? source?.title : undefined),
       note: item.note,
       source: confidence === "verified" ? source : undefined,
+      anchorDate: anchor.date,
+      anchorLabel: anchor.label,
     });
   };
 

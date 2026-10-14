@@ -134,6 +134,9 @@ export interface TimelineEntry {
   citation?: string;
   note?: string;
   source?: ScheduleSource;
+  /** The trigger date and its name, for explaining the count. */
+  anchorDate?: ISODate;
+  anchorLabel?: string;
   /** Already met based on the dates entered (e.g. service completed). */
   satisfied?: boolean;
 }

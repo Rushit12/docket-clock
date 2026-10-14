@@ -1,73 +1,85 @@
 import { useMemo, useState } from "react";
 import { CALC_RULES } from "../engine/calculator";
-import { ALL_COUNTIES, circuitForCounty } from "../engine/circuits";
+import { circuitForCounty, ordinal } from "../engine/circuits";
 import { computeDeadline } from "../engine/compute";
 import { fmt, isValidISO, todayISO, toDate } from "../engine/dates";
 import { buildCalendar } from "../engine/holidays";
-import { Label, PageHeader } from "./ui";
+import { CountyPicker, DateInput, Field, relDays } from "./ui";
 
 export function Calculator() {
-  const [ruleId, setRuleId] = useState(CALC_RULES[0].id);
-  const [date, setDate] = useState(todayISO());
+  const [ruleId, setRuleId] = useState("msjResponse");
+  const [date, setDate] = useState<string | undefined>(todayISO());
   const [mail, setMail] = useState(false);
   const [county, setCounty] = useState("Orange");
   const rule = CALC_RULES.find((r) => r.id === ruleId)!;
+  const today = todayISO();
+  const circuit = circuitForCounty(county);
 
   const result = useMemo(() => {
-    if (!isValidISO(date)) return null;
+    if (!date || !isValidISO(date)) return null;
     const y = toDate(date).getUTCFullYear();
-    const cal = buildCalendar(circuitForCounty(county)?.holidays ?? { goodFriday: "unknown", roshHashanah: "unknown", yomKippur: "unknown" }, y - 1, y + 2);
+    const cal = buildCalendar(circuit?.holidays ?? { goodFriday: "unknown", roshHashanah: "unknown", yomKippur: "unknown" }, y - 1, y + 2);
     const days = mail && rule.afterService ? (rule.mailDaysOverride ?? rule.days + 5) : rule.days;
     const main = computeDeadline(date, days, cal);
     const follow = rule.followOn ? computeDeadline(main.date, rule.followOn.days, cal) : null;
     return { main, follow, days };
-  }, [date, mail, county, rule]);
+  }, [date, mail, circuit, rule]);
 
   return (
-    <div className="max-w-[760px]">
-      <PageHeader title="Rule calculator" sub="For deadlines triggered by something that happens during the case — a motion served, a proposal received, a judgment filed. Counted under Rule 2.514 with the circuit's court holidays." />
-      <div className="rounded-xl border border-rule bg-white p-5 space-y-4">
-        <div>
-          <Label htmlFor="crule">What's due?</Label>
-          <select id="crule" className="field" value={ruleId} onChange={(e) => setRuleId(e.target.value)}>
-            {CALC_RULES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-          </select>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="cdate">{rule.trigger}</Label>
-            <input id="cdate" type="date" className="field tabular" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="ccounty" hint="Sets the court holiday calendar.">County</Label>
-            <select id="ccounty" className="field" value={county} onChange={(e) => setCounty(e.target.value)}>
-              {ALL_COUNTIES.map((c) => <option key={c.county} value={c.county}>{c.county}</option>)}
-            </select>
-          </div>
-        </div>
-        {rule.afterService && (
-          <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" className="accent-ink" checked={mail} onChange={(e) => setMail(e.target.checked)} /> Served by mail (Rule 2.514(b))</label>
-        )}
-      </div>
+    <div>
+      <h1 className="display text-[34px] sm:text-[44px] leading-none font-bold">Rule calculator</h1>
+      <p className="mt-3 text-[16px] text-ink-2 max-w-[62ch] leading-relaxed">For deadlines that start when something happens mid-case: a motion served, a proposal received, a judgment filed. Counted under Rule 2.514 with the circuit's court holidays.</p>
 
-      {result && (
-        <div className="mt-5 rounded-xl bg-ink text-white p-5 sm:p-6">
-          <p className="text-white/70 text-sm">{rule.label}</p>
-          <p className="text-[30px] sm:text-[36px] font-extrabold tracking-tight tabular mt-1"><span className="hl text-ink">{fmt(result.main.date, { weekday: true })}</span></p>
-          <p className="text-[14px] text-white/80 mt-2 leading-relaxed">
-            {result.days} days after {fmt(date)}{result.main.rolled ? `. The raw date, ${fmt(result.main.raw, { weekday: true })}, falls on ${result.main.rollReason}, so it moves to the next open court day.` : "."}
-            {result.main.possibleClosure && ` Heads up: some circuits close for ${result.main.possibleClosure}.`}
-          </p>
-          <p className="text-[13px] text-white/60 mt-2">{rule.citation}{rule.note ? `. ${rule.note}` : ""}</p>
-          {result.follow && (
-            <div className="mt-4 pt-4 border-t border-white/15">
-              <p className="text-white/70 text-sm">{rule.followOn!.label}</p>
-              <p className="text-[22px] font-bold tabular">{fmt(result.follow.date, { weekday: true })}</p>
-              <p className="text-[13px] text-white/60">{rule.followOn!.citation}, unless the parties stipulate or the court orders otherwise.</p>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1fr] items-start">
+        <section>
+          <h2 className="text-[14px] font-semibold text-muted mb-2.5">What happened?</h2>
+          <ul className="rounded-[18px] bg-surface shadow-soft p-1.5" role="radiogroup" aria-label="Deadline type">
+            {CALC_RULES.map((r) => (
+              <li key={r.id}>
+                <button role="radio" aria-checked={r.id === ruleId} onClick={() => setRuleId(r.id)}
+                  className={`w-full text-left flex items-center justify-between gap-3 rounded-[12px] px-3.5 py-2.5 ${r.id === ruleId ? "bg-ink text-white" : "hover:bg-line-2"}`}>
+                  <span className="font-semibold text-[14.5px] leading-snug">{r.label}</span>
+                  <span className={`shrink-0 text-[13px] tabular ${r.id === ruleId ? "text-sun" : "text-muted"}`}>{r.days} days</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="lg:sticky lg:top-24 space-y-5">
+          <div className="rounded-[20px] bg-surface shadow-soft p-5 space-y-5">
+            <Field label={rule.trigger} htmlFor="cdate"><DateInput id="cdate" value={date} onChange={setDate} /></Field>
+            <Field label="County" htmlFor="ccounty" hint={circuit ? `Uses the ${ordinal(circuit.id)} Circuit's court holidays.` : undefined}><CountyPicker id="ccounty" value={county} onChange={setCounty} /></Field>
+            {rule.afterService && (
+              <label className="flex items-start gap-2.5 text-[14.5px]">
+                <input type="checkbox" className="h-4 w-4 mt-0.5 accent-[var(--color-brand)]" checked={mail} onChange={(e) => setMail(e.target.checked)} />
+                <span>Served by mail<span className="block text-[13px] text-muted">{rule.mailDaysOverride ? `${rule.mailDaysOverride} days instead of ${rule.days}.` : "Adds 5 days under Rule 2.514(b)."}</span></span>
+              </label>
+            )}
+          </div>
+
+          {result && (
+            <div className="rounded-[22px] bg-ink text-white p-6 shadow-lift" aria-live="polite">
+              <p className="text-[14px] text-white/65">{rule.label}</p>
+              <p className="display text-[34px] sm:text-[40px] font-bold tabular leading-[1.25] mt-1"><span className="text-sun">{fmt(result.main.date, { weekday: true })}</span></p>
+              <p className="mt-2 text-[14.5px] text-white/80">{relDays(result.main.date, today)}.</p>
+              <p className="mt-4 text-[14.5px] text-white/80 leading-relaxed">
+                {result.days} days after {fmt(date!)}.
+                {result.main.rolled && ` Day ${result.days} is ${fmt(result.main.raw, { weekday: true })}, when the court is closed (${result.main.rollReason}), so it moves to the next open day.`}
+                {result.main.possibleClosure && ` Some circuits close on ${result.main.possibleClosure}; confirm with yours.`}
+              </p>
+              <p className="mt-3 text-[13.5px] text-white/60 leading-relaxed">{rule.citation}{rule.note ? `. ${rule.note}` : ""}</p>
+              {result.follow && (
+                <div className="mt-5 pt-5 border-t border-white/15">
+                  <p className="text-[14px] text-white/65">{rule.followOn!.label}</p>
+                  <p className="display text-[24px] font-bold tabular mt-0.5">{fmt(result.follow.date, { weekday: true })}</p>
+                  <p className="text-[13.5px] text-white/60 mt-1">{rule.followOn!.citation}, unless the parties stipulate or the court orders otherwise.</p>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        </section>
+      </div>
     </div>
   );
 }

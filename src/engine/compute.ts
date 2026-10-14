@@ -42,7 +42,7 @@ export function rollToCourtDay(iso: ISODate, direction: 1 | -1, cal: HolidayCale
     date: d,
     raw: iso,
     rolled: d !== iso,
-    rollReason: reasons.length ? reasons.join(", ") : undefined,
+    rollReason: describeClosures(reasons),
     possibleClosure: cal.possible.get(d),
   };
 }
@@ -70,4 +70,16 @@ export function addCourtDays(trigger: ISODate, n: number, cal: HolidayCalendar):
     if (!isClosed(d, cal)) count++;
   }
   return d;
+}
+
+/** "Saturday" / "a weekend" / "Thanksgiving Day and the weekend" — reads naturally in either direction. */
+export function describeClosures(reasons: string[]): string | undefined {
+  if (!reasons.length) return undefined;
+  const set = Array.from(new Set(reasons));
+  const weekend = set.includes("Saturday") && set.includes("Sunday");
+  const named = set.filter((r) => r !== "Saturday" && r !== "Sunday");
+  const days = set.filter((r) => r === "Saturday" || r === "Sunday");
+  const parts = [...named, ...(weekend ? ["the weekend"] : days)];
+  if (parts.length === 1) return weekend ? "a weekend" : parts[0];
+  return parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
 }
