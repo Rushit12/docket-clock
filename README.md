@@ -23,6 +23,11 @@ npm test         # engine unit tests (holidays, Rule 2.514, circuit schedules, p
 npm run build
 ```
 
+## Live site (GitHub Pages)
+
+Every push to `main` runs the tests, builds, and publishes to **https://rushit12.github.io/docket-clock/** through `.github/workflows/deploy.yml`.
+One-time setup: in the repo go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**, then re-run the workflow.
+
 ## Deploy to Vercel
 
 1. Push this folder to a GitHub repository.
