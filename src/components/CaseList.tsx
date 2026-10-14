@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { phaseOf, summarize } from "../caseUtils";
 import { circuitForCounty, ordinal } from "../engine/circuits";
 import { diffDays, fmt, todayISO } from "../engine/dates";
-import { useCases } from "../store";
+import { useCases, useSettings } from "../store";
 import { Button, DateChip, Empty, relDays } from "./ui";
 
 type Filter = "all" | "late" | "trial90";
@@ -13,7 +13,8 @@ export function CaseList({ go }: { go: (r: string) => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const today = todayISO();
-  const sums = useMemo(() => cases.map((c) => summarize(c, today)), [cases, today]);
+  const [settings] = useSettings();
+  const sums = useMemo(() => cases.map((c) => summarize(c, today, settings)), [cases, today, settings]);
   const rows = sums
     .filter((s) => !q || [s.c.inputs.name, s.c.inputs.caseNumber, s.c.claimNumber, s.c.client, s.c.inputs.county].join(" ").toLowerCase().includes(q.toLowerCase()))
     .filter((s) => filter === "all" || (filter === "late" ? s.overdue.length > 0 : s.daysToTrial !== undefined && s.daysToTrial >= 0 && s.daysToTrial <= 90))

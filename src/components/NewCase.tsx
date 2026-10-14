@@ -108,6 +108,7 @@ export function NewCase({ go }: { go: (r: string) => void }) {
             <Step title="When did things happen?" sub="Only the filing date is required. Each date you add unlocks more deadlines.">
               <Field label="Complaint filed" htmlFor="filing" hint="The action commences on filing (Rule 1.050)."><DateInput id="filing" value={i.filingDate} max={today} onChange={(filingDate) => set({ filingDate })} /></Field>
               <Field label="Our client served" optional htmlFor="svc" hint="Starts the answer, initial disclosure and proposal-for-settlement clocks."><DateInput id="svc" value={i.serviceClientDate} max={today} onChange={(serviceClientDate) => set({ serviceClientDate })} /></Field>
+              <Field label="File assigned to us" optional htmlFor="assigned" hint="Starts the intake and carrier-reporting tasks. Leave blank to use the service date."><DateInput id="assigned" value={i.assignedDate} max={today} onChange={(assignedDate) => set({ assignedDate })} /></Field>
               <label className="flex items-center gap-2.5 text-[14.5px] -mt-2">
                 <input type="checkbox" className="h-4 w-4 accent-[var(--color-brand)]" checked={sameService} onChange={(e) => { setSameService(e.target.checked); if (e.target.checked) set({ serviceLastDate: i.serviceClientDate }); }} />
                 Our client was the last defendant served

@@ -2,6 +2,7 @@ import { computeDeadline, rollToCourtDay } from "./compute";
 import { circuitForCounty, ordinal, type Circuit } from "./circuits";
 import { addDays, addMonths, diffDays, fmt, type ISODate, isValidISO, minDate, toDate } from "./dates";
 import { buildCalendar, type HolidayCalendar } from "./holidays";
+import { buildTasks, type TaskSettings } from "./tasks";
 import type { Anchor, CaseInputs, Category, Confidence, RuleItem, TimelineEntry, TrackSchedule, Warning } from "./types";
 
 export interface OrderItem {
@@ -15,6 +16,9 @@ export interface GenerateOptions {
   overrides?: Record<string, ISODate>;
   orderItems?: OrderItem[];
   today?: ISODate;
+  settings?: TaskSettings;
+  /** Set false to return court and rule deadlines only. */
+  tasks?: boolean;
 }
 
 export interface GenerateResult {
@@ -44,7 +48,8 @@ function basisText(item: RuleItem): string {
   if (item.months) return `${item.months} months after ${a}`;
   const d = item.days ?? 0;
   if (d === 0) return `On ${a}`;
-  return d > 0 ? `${d} days after ${a}` : `${-d} days before ${a}`;
+  const u = Math.abs(d) === 1 ? "day" : "days";
+  return d > 0 ? `${d} ${u} after ${a}` : `${-d} ${u} before ${a}`;
 }
 
 export function generateTimeline(input: CaseInputs, opts: GenerateOptions = {}): GenerateResult {
@@ -241,7 +246,12 @@ export function generateTimeline(input: CaseInputs, opts: GenerateOptions = {}):
   const svcEntry = entries.find((e) => e.id === "service");
   if (svcEntry && anchors.serviceLast && !anchors.serviceLast.estimated && anchors.serviceLast.date <= svcEntry.date) svcEntry.satisfied = true;
 
-  entries.sort((a, b) => (a.date === b.date ? a.label.localeCompare(b.label) : a.date < b.date ? -1 : 1));
+  if (opts.tasks !== false) {
+    entries.push(...buildTasks({ input, entries, anchors, calendar, settings: opts.settings, overrides: opts.overrides }));
+  }
+
+  const kindRank = (k: TimelineEntry["kind"]) => (k === "task" ? 1 : 0);
+  entries.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : kindRank(a.kind) - kindRank(b.kind) || a.label.localeCompare(b.label)));
   warnings.push(...validate(entries, calendar, { input, anchors, schedule, standardDate, useOrder }));
 
   return { circuit, schedule, calendar, entries, warnings, anchors, projectedTrial, standardDate };
@@ -257,7 +267,7 @@ export function validate(
   const by = (id: string) => entries.find((e) => e.id === id);
 
   for (const e of entries) {
-    if (e.possibleClosure && e.kind !== "info") {
+    if (e.possibleClosure && e.kind !== "info" && e.kind !== "task") {
       w.push({ level: "warn", itemId: e.id, message: `“${e.label}” lands on ${fmt(e.date, { weekday: true })} — ${e.possibleClosure}. Some circuits close that day; confirm with your circuit's holiday order before relying on it.` });
     }
     if (e.confidence === "order" || e.confidence === "manual") {

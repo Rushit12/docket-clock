@@ -41,6 +41,7 @@ export function EditCase({ open, onClose, c, onSave }: { open: boolean; onClose:
         <Group title="Key dates">
           <Field label="Complaint filed" htmlFor="e-filing"><DateInput id="e-filing" quick={false} value={i.filingDate} onChange={(v) => set({ filingDate: v })} /></Field>
           <Field label="Our client served" htmlFor="e-svc"><DateInput id="e-svc" quick={false} value={i.serviceClientDate} onChange={(v) => set({ serviceClientDate: v })} /></Field>
+          <Field label="File assigned to us" optional htmlFor="e-assigned" hint="Starts intake and carrier-reporting tasks."><DateInput id="e-assigned" quick={false} value={i.assignedDate} onChange={(v) => set({ assignedDate: v })} /></Field>
           <Field label="Last defendant served" htmlFor="e-last"><DateInput id="e-last" quick={false} value={i.serviceLastDate} onChange={(v) => set({ serviceLastDate: v })} /></Field>
           <Field label="Date of loss" optional htmlFor="e-dol"><DateInput id="e-dol" quick={false} value={i.dateOfLoss} onChange={(v) => set({ dateOfLoss: v })} /></Field>
         </Group>

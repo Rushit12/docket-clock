@@ -1,7 +1,8 @@
 import { diffDays, type ISODate } from "./engine/dates";
 import { generateTimeline, type GenerateResult } from "./engine/generate";
 import type { TimelineEntry } from "./engine/types";
-import type { SavedCase } from "./store";
+import { getSettings, type SavedCase } from "./store";
+import type { TaskSettings } from "./engine/tasks";
 
 export interface CaseSummary {
   c: SavedCase;
@@ -14,12 +15,12 @@ export interface CaseSummary {
   daysToTrial?: number;
 }
 
-export function summarize(c: SavedCase, today: ISODate): CaseSummary {
-  const result = generateTimeline(c.inputs, { overrides: c.overrides, orderItems: c.orderItems });
+export function summarize(c: SavedCase, today: ISODate, settings: TaskSettings = getSettings()): CaseSummary {
+  const result = generateTimeline(c.inputs, { overrides: c.overrides, orderItems: c.orderItems, settings });
   const isDone = (e: TimelineEntry) => c.done[e.id] ?? !!e.satisfied;
   const open = result.entries.filter((e) => e.kind !== "info" && !isDone(e));
   const next = open.find((e) => e.kind === "deadline" && e.date >= today);
-  const overdue = open.filter((e) => e.kind === "deadline" && e.date < today);
+  const overdue = open.filter((e) => (e.kind === "deadline" || e.kind === "task") && e.date < today);
   const filing = c.inputs.filingDate;
   const trial = result.anchors.trial?.date;
   let progress = 0;

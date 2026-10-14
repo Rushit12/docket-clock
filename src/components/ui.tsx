@@ -31,6 +31,7 @@ const CONF: Record<Confidence, { label: string; cls: string; title: string }> = 
   rule: { label: "By rule", cls: "bg-sky-soft text-sky", title: "Fixed by a Florida rule or statute, computed under Rule 2.514." },
   estimate: { label: "Estimate", cls: "bg-sun-soft text-sun-ink", title: "Depends on a date that isn't set yet. Add it to lock this deadline." },
   order: { label: "Your order", cls: "bg-ink text-white", title: "Date printed in the order you imported." },
+  practice: { label: "Firm practice", cls: "bg-[#efeafb] text-[#56399e]", title: "Prep task timed by firm or carrier-guideline lead time. Adjust the lead times in Settings." },
   manual: { label: "Set by you", cls: "bg-line-2 text-ink-2", title: "Entered or changed by you." },
 };
 export function SourceTag({ c }: { c: Confidence }) {

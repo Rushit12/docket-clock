@@ -128,3 +128,68 @@ describe("Imported orders", () => {
     expect(r.entries.filter((e) => e.id === "projectedTrial")).toHaveLength(0);
   });
 });
+
+import { latestTrigger, TASKS } from "./tasks";
+
+describe("Work-back tasks", () => {
+  const broward = {
+    name: "x", county: "Broward", court: "circuit" as const, caseType: "auto" as const, track: "general" as const, jury: true,
+    filingDate: "2026-07-10", serviceClientDate: "2026-08-03", serviceLastDate: "2026-08-10", calendarCallDate: "2027-12-06", trialDate: "2027-12-13",
+  };
+  const r = generateTimeline(broward);
+  const get = (id: string) => r.entries.find((e) => e.id === id);
+
+  it("latestTrigger keeps the 30-day response inside the cutoff, even across a weekend", () => {
+    // Cutoff Mon 2027-11-08. Serving 2027-10-09 (Sat) is not a court day; the latest court day is Fri 2027-10-08.
+    expect(latestTrigger("2027-11-08", 30, cal, false)).toBe("2027-10-08");
+    // By mail: 35 days → 2027-10-04 (Mon).
+    expect(latestTrigger("2027-11-08", 30, cal, true)).toBe("2027-10-04");
+  });
+  it("removal deadline is 30 days after service on our client", () => {
+    expect(get("t_removal")!.date).toBe("2026-09-02");
+  });
+  it("plaintiff's answers come due 30 days after our discovery is served", () => {
+    expect(get("t_serve_disc")!.date).toBe("2026-10-05");
+    expect(get("t_disc_resp")!.date).toBe("2026-11-04");
+  });
+  it("mediation certification of authority is 10 days before mediation (Rule 1.720(e))", () => {
+    expect(get("mediation")!.date).toBe("2027-10-07");
+    expect(get("t_med_cert")!.date).toBe("2027-09-27");
+  });
+  it("rule work-back tasks never land after a stricter CMO deadline", () => {
+    const init = get("discoveryInitiated")!.date;
+    expect(get("t_last_written")!.date <= init).toBe(true);
+    expect(get("t_last_depo_notice")!.date <= init).toBe(true);
+  });
+  it("skips the MSJ briefing task when the CMO's filing deadline is earlier", () => {
+    expect(get("t_msj_last")).toBeUndefined();
+  });
+  it("only adds CME tasks for injury cases and property tasks for property cases", () => {
+    const prop = generateTimeline({ ...broward, caseType: "propertyInsurance" });
+    expect(prop.entries.some((e) => e.id === "t_cme_request")).toBe(false);
+    expect(prop.entries.some((e) => e.id === "t_presuit")).toBe(true);
+    expect(get("t_cme_request")).toBeDefined();
+  });
+  it("every task lands on an open court day", () => {
+    for (const e of r.entries.filter((x) => x.kind === "task")) {
+      const day = new Date(e.date + "T00:00:00Z").getUTCDay();
+      expect(day === 0 || day === 6 || cal.closed.has(e.date), `${e.id} on ${e.date}`).toBe(false);
+    }
+  });
+  it("task ids are unique", () => {
+    expect(new Set(TASKS.map((t) => t.id)).size).toBe(TASKS.length);
+    const ids = r.entries.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+  it("respects firm settings", () => {
+    const off = generateTimeline(broward, { settings: { disabled: { t_hold: true }, days: { t_exp_retain: -120 }, carrierReports: false } });
+    expect(off.entries.some((e) => e.id === "t_hold")).toBe(false);
+    expect(off.entries.some((e) => e.phase === "Carrier reporting")).toBe(false);
+    expect(off.entries.find((e) => e.id === "t_exp_retain")!.date < get("t_exp_retain")!.date).toBe(true);
+  });
+  it("estimates tasks from the projected trial when a circuit has no CMO form", () => {
+    const orange = generateTimeline({ ...broward, county: "Orange", calendarCallDate: undefined, trialDate: undefined });
+    const t = orange.entries.find((e) => e.id === "t_exp_retain")!;
+    expect(t.confidence).toBe("estimate");
+  });
+});

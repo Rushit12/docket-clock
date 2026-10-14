@@ -4,8 +4,8 @@ import { phaseOf, summarize } from "../caseUtils";
 import { circuitForCounty, ordinal } from "../engine/circuits";
 import { diffDays, fmt, fmtMonth, type ISODate, todayISO } from "../engine/dates";
 import { download, toCSV, toICS } from "../engine/export";
-import type { TimelineEntry } from "../engine/types";
-import { type SavedCase, useCases } from "../store";
+import type { Phase, Role, TimelineEntry } from "../engine/types";
+import { type SavedCase, useCases, usePref, useSettings } from "../store";
 import { EditCase } from "./EditCase";
 import { Button, DateChip, DateInput, Empty, relDays, Sheet, SourceTag, toast } from "./ui";
 
@@ -24,12 +24,15 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
   const { cases, upsert, remove } = useCases();
   const c = cases.find((x) => x.id === id);
   const today = todayISO();
-  const [tab, setTab] = useState<"upcoming" | "all" | "checks">("upcoming");
+  const [tab, setTab] = usePref<"upcoming" | "plan" | "all" | "checks">("caseTab", "upcoming");
+  const [show, setShow] = usePref<"everything" | "deadlines" | "tasks">("caseShow", "everything");
+  const [role, setRole] = usePref<Role | "all">("caseRole", "all");
+  const [settings] = useSettings();
   const [selected, setSelected] = useState<string>();
   const [editing, setEditing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const s = useMemo(() => (c ? summarize(c, today) : undefined), [c, today]);
+  const s = useMemo(() => (c ? summarize(c, today, settings) : undefined), [c, today, settings]);
 
   if (!c || !s) {
     return <Empty title="This case isn't in this browser" action={<Button variant="primary" onClick={() => go("/cases")}>Go to cases</Button>}>Cases are saved on the device where they were created.</Empty>;
@@ -54,6 +57,12 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
   const lockKey = back === "calendarCall" ? "calendarCallDate" : back === "pretrial" ? "pretrialDate" : "trialDate";
   const lockLabel = back === "calendarCall" ? "Calendar Call" : back === "pretrial" ? "pretrial conference" : "trial date";
   const warnCount = result.warnings.filter((w) => w.level !== "info").length;
+  const list = result.entries.filter((e) =>
+    (show === "everything" || (show === "tasks" ? e.kind === "task" : e.kind !== "task")) &&
+    (role === "all" || e.kind !== "task" || e.role === role));
+  const nDeadlines = result.entries.filter((e) => e.kind === "deadline").length;
+  const nTasks = result.entries.filter((e) => e.kind === "task").length;
+  const setCheck = (key: string, v: boolean) => upsert({ ...c, checks: { ...(c.checks ?? {}), [key]: v } });
 
   return (
     <div>
@@ -97,7 +106,7 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
       )}
 
       <div className="mt-8 flex items-center gap-1 border-b border-line no-print" role="tablist">
-        {([["upcoming", "Upcoming"], ["all", "All dates"], ["checks", "Checks"]] as const).map(([k, l]) => (
+        {([["upcoming", "Upcoming"], ["plan", "Case plan"], ["all", "All dates"], ["checks", "Checks"]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={`relative h-11 px-3.5 text-[14.5px] font-semibold ${tab === k ? "text-ink" : "text-muted hover:text-ink"}`}>
             {l}{k === "checks" && result.warnings.length > 0 && <span className={`ml-1.5 rounded-full px-1.5 py-[1px] text-[11.5px] ${warnCount ? "bg-sun text-ink" : "bg-line-2 text-ink-2"}`}>{result.warnings.length}</span>}
@@ -106,20 +115,42 @@ export function CaseView({ id, go }: { id: string; go: (r: string) => void }) {
         ))}
       </div>
 
+      {tab !== "checks" && (
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 no-print">
+          <div className="inline-flex rounded-[12px] bg-line-2 p-1 gap-1" role="radiogroup" aria-label="Show">
+            {([["everything", `Everything`], ["deadlines", `Court deadlines (${nDeadlines})`], ["tasks", `Tasks (${nTasks})`]] as const).map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={show === k} onClick={() => setShow(k)} className={`h-8 px-3 rounded-[9px] text-[13.5px] font-semibold ${show === k ? "bg-surface shadow-soft text-ink" : "text-ink-2"}`}>{l}</button>
+            ))}
+          </div>
+          {show !== "deadlines" && (
+            <label className="flex items-center gap-2 text-[13.5px] text-ink-2">
+              Tasks for
+              <select className="input !w-auto !py-1.5 !text-[13.5px]" value={role} onChange={(ev) => setRole(ev.target.value as Role | "all")}>
+                <option value="all">Everyone</option>
+                <option value="Attorney">Attorney</option>
+                <option value="Paralegal">Paralegal</option>
+                <option value="Legal assistant">Legal assistant</option>
+              </select>
+            </label>
+          )}
+        </div>
+      )}
+
       <div className="mt-5">
-        {tab === "upcoming" && <Upcoming s={s} today={today} onPick={setSelected} onDone={setDone} onDoneAll={(list) => {
+        {tab === "upcoming" && <Upcoming s={s} list={list} today={today} onPick={setSelected} onDone={setDone} onDoneAll={(list) => {
           const done = { ...c.done };
           list.forEach((e) => { done[e.id] = true; });
           upsert({ ...c, done });
-          toast(`Marked ${list.length} deadlines done`, { label: "Undo", run: () => upsert({ ...c }) });
+          toast(`Marked ${list.length} items done`, { label: "Undo", run: () => upsert({ ...c }) });
         }} />}
-        {tab === "all" && <AllDates s={s} today={today} onPick={setSelected} onDone={setDone} />}
+        {tab === "plan" && <Plan s={s} list={list} today={today} onPick={setSelected} onDone={setDone} />}
+        {tab === "all" && <AllDates s={s} list={list} today={today} onPick={setSelected} onDone={setDone} />}
         {tab === "checks" && <Checks s={s} onPick={setSelected} />}
       </div>
 
       {sel && (
-        <DeadlineSheet e={sel} today={today} done={s.isDone(sel)} override={c.overrides[sel.id]} c={c}
-          onClose={() => setSelected(undefined)} onDone={(v) => setDone(sel, v)} onOverride={(d) => setOverride(sel.id, d)} />
+        <DeadlineSheet key={sel.id} e={sel} s={s} today={today} done={s.isDone(sel)} override={c.overrides[sel.id]} c={c}
+          onClose={() => setSelected(undefined)} onDone={(v) => setDone(sel, v)} onOverride={(d) => setOverride(sel.id, d)} onPick={setSelected} onCheck={setCheck} />
       )}
       {editing && <EditCase open onClose={() => setEditing(false)} c={c} onSave={(n) => { upsert(n); toast("Case updated. Deadlines recalculated."); }} />}
       <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title={<p className="display text-[22px] font-bold">Delete this case?</p>}
@@ -218,26 +249,30 @@ function LockBanner({ label, count, onSet }: { label: string; count: number; onS
 }
 
 // ---------- Lists ----------
+const actionable = (e: TimelineEntry) => e.kind === "deadline" || e.kind === "task";
+
 function Row({ e, s, today, onPick, onDone }: { e: TimelineEntry; s: S; today: ISODate; onPick: (id: string) => void; onDone: (e: TimelineEntry, v: boolean) => void }) {
   const done = s.isDone(e);
   const d = diffDays(today, e.date);
-  const late = d < 0 && !done && e.kind === "deadline";
+  const late = d < 0 && !done && actionable(e);
   const tone = done ? "done" : late ? "late" : d >= 0 && d <= 14 && e.kind !== "info" ? "soon" : "default";
+  const isTask = e.kind === "task";
   return (
-    <li className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-canvas/60">
-      {e.kind === "deadline" ? (
+    <li className={`flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-canvas/60 ${isTask ? "" : "bg-surface"}`}>
+      {actionable(e) ? (
         <button onClick={() => onDone(e, !done)} aria-pressed={done} aria-label={done ? `Mark ${e.label} not done` : `Mark ${e.label} done`}
-          className={`h-7 w-7 shrink-0 grid place-items-center rounded-full border-[1.5px] transition-colors ${done ? "bg-brand border-brand text-white" : "border-[#c9d3cf] text-transparent hover:border-brand hover:text-brand"}`}>
+          className={`h-7 w-7 shrink-0 grid place-items-center border-[1.5px] transition-colors ${isTask ? "rounded-[8px]" : "rounded-full"} ${done ? "bg-brand border-brand text-white" : "border-[#c9d3cf] text-transparent hover:border-brand hover:text-brand"}`}>
           <Check size={15} strokeWidth={3} />
         </button>
       ) : <span className="h-7 w-7 shrink-0 grid place-items-center text-muted" title={e.kind === "earliest" ? "Window opens" : "Court checkpoint"}>{e.kind === "earliest" ? <ChevronRight size={17} /> : <Info size={16} />}</span>}
       <DateChip date={e.date} tone={tone} />
       <button onClick={() => onPick(e.id)} className="min-w-0 flex-1 text-left">
-        <p className={`font-semibold leading-snug ${done ? "text-muted line-through decoration-1" : ""}`}>
+        <p className={`leading-snug ${isTask ? "font-medium" : "font-semibold"} ${done ? "text-muted line-through decoration-1" : ""}`}>
           {e.kind === "earliest" && <span className="font-normal text-ink-2">Window opens: </span>}{e.label}
         </p>
         <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted">
           <span className={late ? "font-semibold text-late" : tone === "soon" ? "font-semibold text-sun-ink" : ""}>{done ? "Done" : relDays(e.date, today)}</span>
+          {isTask ? <span className="rounded-full border border-line px-2 py-[1px] text-[12px] font-semibold text-ink-2">{e.role}</span> : <span className="rounded-full bg-ink/90 text-white px-2 py-[1px] text-[12px] font-semibold">Court deadline</span>}
           <SourceTag c={e.confidence} />
           {e.rolled && <span>Moved from {fmt(e.raw).replace(/, \d{4}$/, "")}</span>}
           {e.possibleClosure && <span className="text-sun-ink">Check: {e.possibleClosure}</span>}
@@ -267,17 +302,19 @@ function byMonth(list: TimelineEntry[]) {
   return g;
 }
 
-function Upcoming({ s, today, onPick, onDone, onDoneAll }: { s: S; today: ISODate; onPick: (id: string) => void; onDone: (e: TimelineEntry, v: boolean) => void; onDoneAll: (list: TimelineEntry[]) => void }) {
+type ListProps = { s: S; list: TimelineEntry[]; today: ISODate; onPick: (id: string) => void; onDone: (e: TimelineEntry, v: boolean) => void };
+
+function Upcoming({ s, list, today, onPick, onDone, onDoneAll }: ListProps & { onDoneAll: (list: TimelineEntry[]) => void }) {
   const [showDone, setShowDone] = useState(false);
-  const act = s.result.entries.filter((e) => e.kind !== "info");
-  const overdue = act.filter((e) => e.kind === "deadline" && !s.isDone(e) && e.date < today);
+  const act = list.filter((e) => e.kind !== "info");
+  const overdue = act.filter((e) => actionable(e) && !s.isDone(e) && e.date < today);
   const soon = act.filter((e) => !s.isDone(e) && e.date >= today && diffDays(today, e.date) <= 30);
   const later = act.filter((e) => !s.isDone(e) && diffDays(today, e.date) > 30);
-  const done = act.filter((e) => s.isDone(e) || (e.kind !== "deadline" && e.date < today));
+  const done = act.filter((e) => s.isDone(e) || (!actionable(e) && e.date < today));
   const row = (e: TimelineEntry) => <Row key={e.id} e={e} s={s} today={today} onPick={onPick} onDone={onDone} />;
   return (
     <div>
-      {overdue.length > 0 && <Block title="Past due" sub="Mark done, or open one to record the court's new date" tone="late" action={overdue.length > 1 ? <Button size="sm" onClick={() => onDoneAll(overdue)}><Check size={15} /> Mark all {overdue.length} done</Button> : undefined}>{overdue.map(row)}</Block>}
+      {overdue.length > 0 && <Block title="Past due" sub="Mark done, or open one to record a new date" tone="late" action={overdue.length > 1 ? <Button size="sm" onClick={() => onDoneAll(overdue)}><Check size={15} /> Mark all {overdue.length} done</Button> : undefined}>{overdue.map(row)}</Block>}
       <Block title="Next 30 days">{soon.length ? soon.map(row) : <li className="px-4 py-4 text-[14.5px] text-muted">Nothing due in the next 30 days.</li>}</Block>
       {byMonth(later).map((g) => <Block key={g.m} title={g.m}>{g.items.map(row)}</Block>)}
       {done.length > 0 && (
@@ -292,11 +329,43 @@ function Upcoming({ s, today, onPick, onDone, onDoneAll }: { s: S; today: ISODat
   );
 }
 
-function AllDates({ s, today, onPick, onDone }: { s: S; today: ISODate; onPick: (id: string) => void; onDone: (e: TimelineEntry, v: boolean) => void }) {
+const PHASES: Phase[] = ["Intake & pleadings", "Disclosures & written discovery", "Records & subpoenas", "Depositions", "Medical exam", "Experts", "Dispositive motions", "Mediation & settlement", "Trial preparation", "Carrier reporting"];
+const DEADLINE_PHASE: Record<string, Phase> = {
+  service: "Intake & pleadings", serviceExt: "Intake & pleadings", answer: "Intake & pleadings", discWithComplaint: "Disclosures & written discovery", sol: "Intake & pleadings",
+  initialDisclosures: "Disclosures & written discovery", addParties: "Intake & pleadings", objections: "Intake & pleadings", objectionsFile: "Intake & pleadings", objectionsResolve: "Intake & pleadings", fabre: "Intake & pleadings",
+  factDiscovery: "Depositions", discoveryComplete: "Depositions", discovery: "Depositions", discoveryInitiated: "Disclosures & written discovery", writtenDiscovery: "Disclosures & written discovery", compel: "Disclosures & written discovery",
+  factWitness: "Trial preparation", factWitnessPrelim: "Disclosures & written discovery", witnessExhibitList: "Trial preparation", finalWitnesses: "Trial preparation", surveillance: "Disclosures & written discovery", northrup: "Trial preparation",
+  cme: "Medical exam", cmeReport: "Medical exam",
+  expertDisclosure: "Experts", expertP: "Experts", expertD: "Experts", expertRebuttal: "Experts", rebuttal: "Experts", expertDiscovery: "Experts", daubert: "Experts", daubertFile: "Experts", daubertHeard: "Experts",
+  msjFile: "Dispositive motions", msjHeard: "Dispositive motions", msjResolve: "Dispositive motions", pretrialMotions: "Trial preparation", pretrialMotionsFile: "Trial preparation", pretrialMotionsResolve: "Dispositive motions", motionsHeard: "Trial preparation", milFile: "Trial preparation", milResolve: "Trial preparation", milHeard: "Trial preparation",
+  mediation: "Mediation & settlement", mediatorSelect: "Mediation & settlement", mediatorAgreed: "Mediation & settlement", pfsDefenseOpens: "Mediation & settlement", pfsPlaintiffOpens: "Mediation & settlement", pfsLast: "Mediation & settlement",
+};
+const phaseFor = (e: TimelineEntry): Phase => e.phase ?? DEADLINE_PHASE[e.id.replace(/_\d+$/, "")] ?? (e.category === "settlement" ? "Mediation & settlement" : e.category === "adr" ? "Mediation & settlement" : e.category === "experts" ? "Experts" : e.category === "discovery" ? "Disclosures & written discovery" : e.category === "motions" ? "Dispositive motions" : e.category === "pleadings" || e.category === "service" ? "Intake & pleadings" : "Trial preparation");
+
+function Plan({ s, list, today, onPick, onDone }: ListProps) {
+  const act = list.filter((e) => e.kind !== "info");
+  return (
+    <div>
+      <p className="mb-5 text-[14.5px] text-ink-2 max-w-[72ch] leading-relaxed">The full case plan by stage: every court deadline and the work it takes to meet it. Court deadlines come from your CMO and the rules; tasks are worked back from them.</p>
+      {PHASES.map((p) => {
+        const items = act.filter((e) => phaseFor(e) === p);
+        if (!items.length) return null;
+        const done = items.filter((e) => s.isDone(e)).length;
+        return (
+          <Block key={p} title={p} action={<span className="ml-auto flex items-center gap-2 text-[13px] text-muted tabular"><span className="h-1.5 w-20 rounded-full bg-line-2 overflow-hidden inline-block"><span className="block h-full bg-brand" style={{ width: `${Math.round((done / items.length) * 100)}%` }} /></span>{done} of {items.length}</span>}>
+            {items.map((e) => <Row key={e.id} e={e} s={s} today={today} onPick={onPick} onDone={onDone} />)}
+          </Block>
+        );
+      })}
+    </div>
+  );
+}
+
+function AllDates({ s, list, today, onPick, onDone }: ListProps) {
   return (
     <div>
       <p className="mb-4 text-[14px] text-ink-2 max-w-[70ch]">Every date on this case, including court checkpoints like the CMO issuance deadline and the limitations date.</p>
-      {byMonth(s.result.entries).map((g) => <Block key={g.m} title={g.m}>{g.items.map((e) => <Row key={e.id} e={e} s={s} today={today} onPick={onPick} onDone={onDone} />)}</Block>)}
+      {byMonth(list).map((g) => <Block key={g.m} title={g.m}>{g.items.map((e) => <Row key={e.id} e={e} s={s} today={today} onPick={onPick} onDone={onDone} />)}</Block>)}
     </div>
   );
 }
@@ -319,21 +388,60 @@ function Checks({ s, onPick }: { s: S; onPick: (id: string) => void }) {
   );
 }
 
-// ---------- Deadline detail ----------
-function DeadlineSheet({ e, today, done, override, c, onClose, onDone, onOverride }: {
-  e: TimelineEntry; today: ISODate; done: boolean; override?: ISODate; c: SavedCase;
-  onClose: () => void; onDone: (v: boolean) => void; onOverride: (d?: ISODate) => void;
+// ---------- Deadline / task detail ----------
+function DeadlineSheet({ e, s, today, done, override, c, onClose, onDone, onOverride, onPick, onCheck }: {
+  e: TimelineEntry; s: S; today: ISODate; done: boolean; override?: ISODate; c: SavedCase;
+  onClose: () => void; onDone: (v: boolean) => void; onOverride: (d?: ISODate) => void; onPick: (id: string) => void; onCheck: (key: string, v: boolean) => void;
 }) {
   const d = diffDays(today, e.date);
+  const isTask = e.kind === "task";
+  const parent = e.parentId ? s.result.entries.find((x) => x.id === e.parentId) : undefined;
+  const children = s.result.entries.filter((x) => x.parentId === e.id);
   return (
     <Sheet open onClose={onClose}
-      title={<div><div className="flex flex-wrap items-center gap-2 mb-2"><SourceTag c={e.confidence} />{done && <span className="rounded-full bg-brand-soft text-brand-2 px-2 py-[1px] text-[12px] font-semibold">Done</span>}</div><p className="display text-[23px] font-bold leading-tight">{e.label}</p></div>}
+      title={<div>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          {isTask ? <span className="rounded-full border border-line px-2 py-[1px] text-[12px] font-semibold text-ink-2">Task for {e.role}</span> : <span className="rounded-full bg-ink text-white px-2 py-[1px] text-[12px] font-semibold">Court deadline</span>}
+          <SourceTag c={e.confidence} />
+          {done && <span className="rounded-full bg-brand-soft text-brand-2 px-2 py-[1px] text-[12px] font-semibold">Done</span>}
+        </div>
+        <p className="display text-[23px] font-bold leading-tight">{e.label}</p>
+        {e.phase && <p className="text-[13.5px] text-muted mt-1">{e.phase}</p>}
+      </div>}
       footer={<>
         {!framed && <Button onClick={() => download(`${e.id}.ics`, toICS([{ name: c.inputs.name, caseNumber: c.inputs.caseNumber, entries: [e] }]), "text/calendar")}><CalendarPlus size={16} /> Add to calendar</Button>}
-        {e.kind === "deadline" && <Button variant={done ? "secondary" : "primary"} onClick={() => onDone(!done)}><Check size={16} /> {done ? "Mark not done" : "Mark done"}</Button>}
+        {actionable(e) && <Button variant={done ? "secondary" : "primary"} onClick={() => onDone(!done)}><Check size={16} /> {done ? "Mark not done" : "Mark done"}</Button>}
       </>}>
       <p className="display text-[32px] font-bold tabular leading-tight"><span className={d >= 0 && d <= 14 && !done ? "hl" : ""}>{fmt(e.date, { weekday: true })}</span></p>
-      <p className={`mt-1.5 text-[15px] font-semibold ${d < 0 && !done && e.kind === "deadline" ? "text-late" : "text-ink-2"}`}>{relDays(e.date, today)}</p>
+      <p className={`mt-1.5 text-[15px] font-semibold ${d < 0 && !done && actionable(e) ? "text-late" : "text-ink-2"}`}>{relDays(e.date, today)}</p>
+
+      {parent && (
+        <button onClick={() => onPick(parent.id)} className="mt-5 w-full text-left rounded-[14px] border border-line p-3 hover:border-[#c9d3cf]">
+          <p className="text-[12.5px] font-semibold text-muted">Supports</p>
+          <p className="font-semibold leading-snug">{parent.label}</p>
+          <p className="text-[13px] text-ink-2 tabular">{fmt(parent.date, { weekday: true })}</p>
+        </button>
+      )}
+
+      {e.checklist && e.checklist.length > 0 && (
+        <>
+          <h3 className="mt-7 text-[14px] font-semibold text-muted">Checklist</h3>
+          <ul className="mt-2.5 space-y-1.5">
+            {e.checklist.map((item, i) => {
+              const key = `${e.id}:${i}`;
+              const on = !!c.checks?.[key];
+              return (
+                <li key={key}>
+                  <label className="flex items-start gap-2.5 text-[14.5px] cursor-pointer">
+                    <input type="checkbox" className="h-4 w-4 mt-[3px] accent-[var(--color-brand)]" checked={on} onChange={(ev) => onCheck(key, ev.target.checked)} />
+                    <span className={on ? "text-muted line-through" : ""}>{item}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
 
       <h3 className="mt-7 text-[14px] font-semibold text-muted">How this date is counted</h3>
       <ol className="mt-3 relative space-y-4 pl-7 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-line">
@@ -345,20 +453,38 @@ function DeadlineSheet({ e, today, done, override, c, onClose, onDone, onOverrid
             : <Step dot="bg-surface border-brand" title={e.basis} body={`Lands on ${fmt(e.raw, { weekday: true })}${e.rolled ? "" : ", an open court day"}`} />}
         {e.rolled && <Step dot="bg-sun border-ink" title={`Court closed: ${e.rollReason}`} body={`Rule 2.514(a) moves it ${e.date > e.raw ? "forward" : "back"} to ${fmt(e.date, { weekday: true })}.`} />}
       </ol>
+      {e.confidence === "practice" && <p className="mt-4 text-[13.5px] text-ink-2 leading-relaxed">This lead time is a firm or carrier-guideline default, not a rule. Change it for every case in <a href="#/settings" className="font-semibold text-brand hover:underline">Firm settings</a>, or set a different date below for this case.</p>}
       {e.possibleClosure && <p className="mt-5 rounded-[14px] bg-sun-soft p-3.5 text-[14px] leading-relaxed">{fmt(e.date)} is {e.possibleClosure}. Some circuits close that day. Check your circuit's holiday order; if the court is closed, the deadline moves.</p>}
 
       {(e.citation || e.note || e.source?.url) && (
         <>
-          <h3 className="mt-7 text-[14px] font-semibold text-muted">Authority</h3>
+          <h3 className="mt-7 text-[14px] font-semibold text-muted">{isTask ? "Why and authority" : "Authority"}</h3>
           {e.citation && <p className="mt-2 text-[15px] leading-relaxed">{e.citation}</p>}
           {e.note && <p className="mt-2 text-[14.5px] text-ink-2 leading-relaxed">{e.note}</p>}
           {e.source?.url && <a href={e.source.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-[14.5px] font-semibold text-brand hover:underline underline-offset-2">Open the source order <ExternalLink size={14} /></a>}
         </>
       )}
 
-      <h3 className="mt-7 text-[14px] font-semibold text-muted">Did the court set a different date?</h3>
+      {children.length > 0 && (
+        <>
+          <h3 className="mt-7 text-[14px] font-semibold text-muted">Tasks that lead up to this</h3>
+          <ul className="mt-2 rounded-[14px] border border-line divide-y divide-line-2 overflow-hidden">
+            {children.map((k) => (
+              <li key={k.id}>
+                <button onClick={() => onPick(k.id)} className="w-full text-left flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-canvas">
+                  <span className={`text-[14px] leading-snug ${s.isDone(k) ? "text-muted line-through" : ""}`}>{k.label}</span>
+                  <span className="text-[13px] text-ink-2 tabular shrink-0">{fmt(k.date).replace(/, \d{4}$/, "")}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <h3 className="mt-7 text-[14px] font-semibold text-muted">{isTask ? "Planning a different date?" : "Did the court set a different date?"}</h3>
       <div className="mt-2.5"><DateInput id={`ov-${e.id}`} quick={false} value={override} onChange={(v) => onOverride(v)} /></div>
       {override && <button onClick={() => onOverride(undefined)} className="mt-2 inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand"><RotateCcw size={14} /> Go back to the computed date</button>}
+      {!isTask && children.length > 0 && <p className="mt-2 text-[13px] text-muted">Changing this date moves every task that leads up to it.</p>}
     </Sheet>
   );
 }

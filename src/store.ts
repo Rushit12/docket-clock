@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, type TaskSettings } from "./engine/tasks";
 import { useCallback, useEffect, useState } from "react";
 import type { ISODate } from "./engine/dates";
 import type { OrderItem } from "./engine/generate";
@@ -12,6 +13,8 @@ export interface SavedCase {
   done: Record<string, boolean>;
   orderItems?: OrderItem[];
   orderSource?: string;
+  /** Checklist ticks, keyed "taskId:index". */
+  checks?: Record<string, boolean>;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,4 +87,43 @@ export function useRoute(): [string, (r: string) => void] {
     return () => window.removeEventListener("hashchange", on);
   }, []);
   return [route, (r: string) => { window.location.hash = r; }];
+}
+
+// ---------- Firm task settings ----------
+
+const SKEY = "docketclock.settings.v1";
+function readSettings(): TaskSettings {
+  try {
+    const raw = localStorage.getItem(SKEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as TaskSettings) } : DEFAULT_SETTINGS;
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+let settingsMem: TaskSettings = readSettings();
+const settingsListeners = new Set<() => void>();
+export function getSettings(): TaskSettings {
+  return settingsMem;
+}
+export function useSettings(): [TaskSettings, (s: TaskSettings) => void] {
+  const [s, setS] = useState(settingsMem);
+  useEffect(() => {
+    const l = () => setS(settingsMem);
+    settingsListeners.add(l);
+    return () => void settingsListeners.delete(l);
+  }, []);
+  const save = useCallback((next: TaskSettings) => {
+    settingsMem = next;
+    try { localStorage.setItem(SKEY, JSON.stringify(next)); } catch { /* ignore */ }
+    settingsListeners.forEach((l) => l());
+  }, []);
+  return [s, save];
+}
+
+// ---------- Small per-viewer preferences ----------
+export function usePref<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => {
+    try { const raw = localStorage.getItem(`docketclock.pref.${key}`); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
+  });
+  return [v, (n: T) => { setV(n); try { localStorage.setItem(`docketclock.pref.${key}`, JSON.stringify(n)); } catch { /* ignore */ } }];
 }

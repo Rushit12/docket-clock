@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { phaseOf, summarize } from "../caseUtils";
 import { addDays, diffDays, fmt, type ISODate, todayISO } from "../engine/dates";
 import type { TimelineEntry } from "../engine/types";
-import { newId, type SavedCase, useCases } from "../store";
+import { newId, type SavedCase, useCases, usePref, useSettings } from "../store";
+import type { Role } from "../engine/types";
 import { Button, DateChip, relDays, SourceTag, toast } from "./ui";
 
 export function sampleCase(today: ISODate): SavedCase {
@@ -29,14 +30,16 @@ function greeting() {
 export function Home({ go }: { go: (r: string) => void }) {
   const { cases, upsert } = useCases();
   const today = todayISO();
-  const sums = useMemo(() => cases.map((c) => summarize(c, today)), [cases, today]);
-  const items: Item[] = useMemo(() => sums.flatMap((s) => s.open.map((e) => ({ c: s.c, e }))).sort((a, b) => (a.e.date < b.e.date ? -1 : 1)), [sums]);
+  const [settings] = useSettings();
+  const [role, setRole] = usePref<Role | "all">("homeRole", "all");
+  const sums = useMemo(() => cases.map((c) => summarize(c, today, settings)), [cases, today, settings]);
+  const items: Item[] = useMemo(() => sums.flatMap((s) => s.open.filter((e) => role === "all" || e.kind !== "task" || e.role === role).map((e) => ({ c: s.c, e }))).sort((a, b) => (a.e.date < b.e.date ? -1 : 1)), [sums, role]);
 
   const openSample = () => { const s = sampleCase(today); upsert(s); go(`/case/${s.id}`); };
 
   if (!cases.length) return <Welcome go={go} openSample={openSample} />;
 
-  const overdue = items.filter((x) => x.e.kind === "deadline" && x.e.date < today);
+  const overdue = items.filter((x) => (x.e.kind === "deadline" || x.e.kind === "task") && x.e.date < today);
   const upcoming = items.filter((x) => x.e.date >= today);
   const week = upcoming.filter((x) => diffDays(today, x.e.date) <= 7);
   const month = upcoming.filter((x) => diffDays(today, x.e.date) > 7 && diffDays(today, x.e.date) <= 30);
@@ -102,7 +105,18 @@ export function Home({ go }: { go: (r: string) => void }) {
           )}
 
           <section>
-            <h2 className="display text-[21px] font-bold mb-3">This week</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <h2 className="display text-[21px] font-bold">This week</h2>
+              <label className="flex items-center gap-2 text-[13.5px] text-ink-2">
+                Showing tasks for
+                <select className="input !w-auto !py-1.5 !text-[13.5px]" value={role} onChange={(ev) => setRole(ev.target.value as Role | "all")}>
+                  <option value="all">Everyone</option>
+                  <option value="Attorney">Attorney</option>
+                  <option value="Paralegal">Paralegal</option>
+                  <option value="Legal assistant">Legal assistant</option>
+                </select>
+              </label>
+            </div>
             {week.length ? <List items={week} today={today} go={go} onDone={markDone} /> : <p className="text-[14.5px] text-muted">Nothing due in the next 7 days.</p>}
           </section>
           <section>
@@ -179,9 +193,9 @@ function List({ items, today, go, onDone, tone }: { items: Item[]; today: ISODat
             <button onClick={() => go(`/case/${c.id}`)} className="min-w-0 flex-1 text-left">
               <p className="font-semibold leading-snug">{e.kind === "earliest" ? "Window opens: " : ""}{e.label}</p>
               <p className="text-[13.5px] text-ink-2 mt-0.5 truncate">{c.inputs.name}</p>
-              <p className={`text-[13px] mt-0.5 flex flex-wrap items-center gap-2 ${tone === "late" ? "text-late font-semibold" : "text-muted"}`}>{relDays(e.date, today)} <SourceTag c={e.confidence} /></p>
+              <p className={`text-[13px] mt-0.5 flex flex-wrap items-center gap-2 ${tone === "late" ? "text-late font-semibold" : "text-muted"}`}>{relDays(e.date, today)} {e.kind === "task" ? <span className="rounded-full border border-line px-2 py-[1px] text-[12px] font-semibold text-ink-2">{e.role}</span> : <span className="rounded-full bg-ink/90 text-white px-2 py-[1px] text-[12px] font-semibold">Court deadline</span>} <SourceTag c={e.confidence} /></p>
             </button>
-            {e.kind === "deadline" && (
+            {(e.kind === "deadline" || e.kind === "task") && (
               <button onClick={() => onDone(c, e)} title="Mark done" aria-label={`Mark ${e.label} done`}
                 className="h-9 w-9 shrink-0 grid place-items-center rounded-full border-[1.5px] border-line text-muted hover:border-brand hover:text-brand hover:bg-brand-soft">
                 <Check size={17} />

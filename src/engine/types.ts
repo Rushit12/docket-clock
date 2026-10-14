@@ -80,7 +80,20 @@ export interface RuleItem {
   when?: (c: CaseInputs) => boolean;
 }
 
-export type Confidence = "verified" | "rule" | "estimate" | "order" | "manual";
+export type Confidence = "verified" | "rule" | "estimate" | "order" | "manual" | "practice";
+
+export type Role = "Attorney" | "Paralegal" | "Legal assistant";
+export type Phase =
+  | "Intake & pleadings"
+  | "Disclosures & written discovery"
+  | "Records & subpoenas"
+  | "Depositions"
+  | "Medical exam"
+  | "Experts"
+  | "Dispositive motions"
+  | "Mediation & settlement"
+  | "Trial preparation"
+  | "Carrier reporting";
 
 export interface ScheduleSource {
   title: string;
@@ -109,6 +122,8 @@ export interface CaseInputs {
   jury: boolean;
   filingDate?: ISODate;
   serviceClientDate?: ISODate;
+  /** Date the file was assigned to defense counsel (defaults to service on our client). */
+  assignedDate?: ISODate;
   serviceLastDate?: ISODate;
   dateOfLoss?: ISODate;
   calendarCallDate?: ISODate;
@@ -128,8 +143,14 @@ export interface TimelineEntry {
   rolled: boolean;
   rollReason?: string;
   possibleClosure?: string;
-  kind: "deadline" | "earliest" | "event" | "info";
+  kind: "deadline" | "earliest" | "event" | "info" | "task";
   confidence: Confidence;
+  /** Work-back task fields. */
+  role?: Role;
+  phase?: Phase;
+  parentId?: string;
+  parentLabel?: string;
+  checklist?: string[];
   basis: string; // human readable "420 days after filing"
   citation?: string;
   note?: string;

@@ -1,4 +1,4 @@
-import { Calculator as CalcIcon, FileUp, FolderOpen, Home as HomeIcon, Plus, Search } from "lucide-react";
+import { Calculator as CalcIcon, FileUp, FolderOpen, Home as HomeIcon, Plus, Search, Settings as Gear } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Calculator } from "./components/Calculator";
 import { CaseList } from "./components/CaseList";
@@ -7,6 +7,7 @@ import { Coverage } from "./components/Coverage";
 import { Home } from "./components/Home";
 import { ImportOrder } from "./components/ImportOrder";
 import { NewCase } from "./components/NewCase";
+import { Settings } from "./components/Settings";
 import { Toaster } from "./components/ui";
 import { useCases, useRoute } from "./store";
 
@@ -37,6 +38,7 @@ export default function App() {
   else if (route === "/import") page = <ImportOrder go={go} />;
   else if (route === "/calculator") page = <Calculator />;
   else if (route === "/sources") page = <Coverage />;
+  else if (route === "/settings") page = <Settings />;
   else if (caseMatch) page = <CaseView key={caseMatch[1]} id={caseMatch[1]} go={go} />;
   else page = <Home go={go} />;
 
@@ -65,6 +67,7 @@ export default function App() {
               <Search size={16} /> <span className="flex-1 text-left">Find a case</span>
               <kbd className="text-[11.5px] font-semibold rounded-md bg-line-2 px-1.5 py-0.5 text-ink-2">⌘K</kbd>
             </button>
+            <a href="#/settings" aria-label="Firm settings" title="Firm settings" className={`h-10 w-10 grid place-items-center rounded-xl hover:bg-line-2 ${route === "/settings" ? "bg-line-2" : ""}`}><Gear size={19} /></a>
             <button onClick={() => setPalette(true)} aria-label="Find a case" className="sm:hidden h-10 w-10 grid place-items-center rounded-xl hover:bg-line-2"><Search size={19} /></button>
             <a href="#/new" className="inline-flex items-center gap-1.5 h-10 px-4 rounded-xl bg-brand text-white text-[14.5px] font-semibold hover:bg-brand-2">
               <Plus size={18} /> <span className="hidden sm:inline">New case</span>
@@ -81,6 +84,7 @@ export default function App() {
             <div className="mx-auto max-w-[1160px] px-6 py-6 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-muted">
               <span>Built for Florida insurance defense.</span>
               <a href="#/sources" className="hover:text-ink underline-offset-2 hover:underline">Circuits, rules and sources</a>
+              <a href="#/settings" className="hover:text-ink underline-offset-2 hover:underline">Firm settings</a>
               <span>A calculation aid, not legal advice. The order entered in your case controls.</span>
             </div>
           </footer>
@@ -112,6 +116,7 @@ function Palette({ onClose, go }: { onClose: () => void; go: (r: string) => void
       { label: "Import an issued CMO", to: "/import", hint: "Action" },
       { label: "Open the rule calculator", to: "/calculator", hint: "Action" },
       { label: "Circuits, rules and sources", to: "/sources", hint: "Reference" },
+      { label: "Firm settings: task lead times", to: "/settings", hint: "Settings" },
     ];
     const cs = cases.map((c) => ({ label: c.inputs.name, to: `/case/${c.id}`, hint: [c.inputs.caseNumber, c.claimNumber, c.inputs.county].filter(Boolean).join(", ") }));
     const t = q.toLowerCase();
